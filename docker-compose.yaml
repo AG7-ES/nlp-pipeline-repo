@@ -1,0 +1,94 @@
+# ========================================
+# The NLPipeline API Docker Compose File
+# Service orchestration configuration
+# ========================================
+version: "3.9"
+
+services:
+  # =======================
+  # PostgreSQL Database
+  # =======================
+  db:
+    image: postgres:15-alpine
+    container_name: nlp_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks: [app_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    stop_grace_period: 20s
+    mem_limit: 1g
+
+  # =======================
+  # FastAPI NLP Service
+  # =======================
+  fastapi:
+    build:
+      context: ./fastapi_app
+      dockerfile: Dockerfile
+    container_name: nlp_fastapi
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: db
+      DB_PORT: 5432
+      PYTHONUNBUFFERED: 1
+      DD_SERVICE: nlp-fastapi
+      DD_ENV: dev
+      DD_VERSION: 0.1.0
+      DD_AGENT_HOST: datadog
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./text_db/texts:/app/texts:ro
+    networks: [app_net]
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--fail", "http://localhost:8000/files"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 20s
+    mem_limit: 1g
+
+  # =======================
+  # Datadog Agent
+  # =======================
+  datadog:
+    container_name: dd-agent
+    image: "gcr.io/datadoghq/agent:7"
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=datadoghq.eu
+      - DD_APM_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    networks: [app_net]
+
+# =======================
+# Persistent Volumes
+# =======================
+volumes:
+  pgdata:
+
+# =======================
+# Networks
+# =======================
+networks:
+  app_net:
+    driver: bridge
