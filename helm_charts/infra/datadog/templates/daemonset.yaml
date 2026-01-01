@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: datadog-{{ .Release.Namespace }}
+  namespace: {{ include "datadog.namespace" . }}
+  labels:
+    {{ include "datadog.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: datadog
+  template:
+    metadata:
+      labels:
+        app: datadog
+    spec:
+      serviceAccountName: datadog-agent-{{ .Release.Namespace }}
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: datadog-agent
+          image: {{ .Values.datadog.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: datadog-secret
+                  key: DD_API_KEY
+            - name: DD_SITE
+              value: {{ .Values.datadog.site }}
+            - name: DD_APM_ENABLED
+              value: "true"
+            - name: DD_APM_NON_LOCAL_TRAFFIC
+              value: "true"
+            - name: DD_LOGS_ENABLED
+              value: "true"
+            - name: DD_CONTAINER_COLLECT_ALL
+              value: "true"
+            - name: DD_KUBERNETES_KUBELET_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DD_PROCESS_AGENT_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 8126
+              hostPort: 8126
+              protocol: TCP
+            - containerPort: 8125
+              hostPort: 8125
+              protocol: UDP
+          resources: {{ toYaml .Values.datadog.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+            capabilities:
+              add: [SYS_ADMIN, SYS_PTRACE, NET_ADMIN, NET_RAW]
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: cgroup
+              mountPath: /host/sys/fs/cgroup
+              readOnly: true
+            - name: datadog-run
+              mountPath: /var/run/datadog
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: datadog-run
+          hostPath:
+            path: /var/run/datadog

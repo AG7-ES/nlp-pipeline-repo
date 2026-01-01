@@ -1,0 +1,6 @@
+clusterIssuer:
+  name: letsencrypt-key
+  email: nldlee@hotmail.com
+  server: https://acme-v02.api.letsencrypt.org/directory
+  privateKeySecretName: letsencrypt-key
+  ingressClass: traefik

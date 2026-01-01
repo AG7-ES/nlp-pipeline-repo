@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-{{ .Release.Name }}
+  labels:
+    {{ include "nlp-pipeline.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.fastapi.replicas }}
+  selector:
+    matchLabels:
+      app: fastapi
+  template:
+    metadata:
+      labels:
+        app: fastapi
+    spec:
+      containers:
+        - name: fastapi
+          image: {{ .Values.fastapi.image }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config-{{ .Release.Name }}
+                  key: POSTGRES_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config-{{ .Release.Name }}
+                  key: POSTGRES_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config-{{ .Release.Name }}
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret-{{ .Release.Name }}
+                  key: POSTGRES_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config-{{ .Release.Name }}
+                  key: POSTGRES_DB
+            - name: TEXT_DIR
+              value: /app/texts
+            
+            - name: DD_TRACE_AGENT_URL
+              value: {{ .Values.fastapi.datadog.env.DD_TRACE_AGENT_URL | quote }}
+            - name: DD_LOGS_INJECTION
+              value: {{ .Values.fastapi.datadog.env.DD_LOGS_INJECTION | quote }}
+            - name: DD_SERVICE
+              value: {{ .Values.fastapi.datadog.env.DD_SERVICE | quote }}
+            - name: DD_ENV
+              value: {{ .Release.Namespace | quote }}
+            - name: DD_VERSION
+              value: {{ .Values.fastapi.datadog.env.DD_VERSION | quote }}
+
+            - name: DD_KUBERNETES_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: DD_KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DD_KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          volumeMounts:
+            - name: text-storage
+              mountPath: /app/texts
+              readOnly: true
+            - name: datadog-socket
+              mountPath: /var/run/datadog
+
+      volumes:
+        - name: text-storage
+          persistentVolumeClaim:
+            claimName: text-pvc-{{ .Release.Name }}
+        - name: datadog-socket
+          hostPath:
+            path: /var/run/datadog
+            type: Directory

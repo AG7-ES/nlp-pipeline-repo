@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fastapi-ingress-{{ .Release.Name }}
+  labels:
+    {{ include "nlp-pipeline.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.fastapi.ingress.certManager.clusterIssuer }}
+spec:
+  ingressClassName: {{ .Values.fastapi.ingress.className }}
+  tls:
+    - secretName: {{ .Values.fastapi.ingress.tls.secretName }}
+      hosts:
+        - {{ .Values.fastapi.ingress.host }}
+  rules:
+    - host: {{ .Values.fastapi.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fastapi-service-{{ .Release.Name }}
+                port:
+                  number: {{ .Values.fastapi.service.port }}

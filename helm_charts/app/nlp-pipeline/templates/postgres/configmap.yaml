@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config-{{ .Release.Name }}
+  labels:
+    {{ include "nlp-pipeline.labels" . | nindent 4 }}
+data:
+  POSTGRES_HOST: db
+  POSTGRES_DB: {{ .Values.postgres.db.name }}
+  POSTGRES_PORT: "{{ .Values.postgres.db.port }}"
+  POSTGRES_USER: {{ .Values.postgres.db.user }}

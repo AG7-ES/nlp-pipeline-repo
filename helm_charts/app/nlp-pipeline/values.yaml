@@ -1,0 +1,55 @@
+# -------------------------------------------------------------------
+# FastAPI application
+# -------------------------------------------------------------------
+fastapi:
+  image: ag7es/nlp-pipeline:latest
+  replicas: 3
+
+  service:
+    port: 80
+
+  ingress:
+    enabled: true
+    className: traefik
+    host: nlp.ag7-es.ip-ddns.com
+
+    tls:
+      enabled: true
+      secretName: nlp-secret
+
+    certManager:
+      enabled: true
+      clusterIssuer: letsencrypt-key
+
+  datadog:
+    service: nlp-fastapi
+    version: "3.0.0"
+    env:
+      DD_TRACE_AGENT_URL: "unix:///var/run/datadog/apm.socket"
+      DD_LOGS_INJECTION: "true"
+      DD_SERVICE: "nlp-fastapi"
+      DD_VERSION: "3.0.0"
+
+# -------------------------------------------------------------------
+# PostgreSQL
+# -------------------------------------------------------------------
+postgres:
+  image: postgres:15-alpine
+
+  db:
+    name: nlpdb
+    user: user
+    password: password
+    port: 5432
+
+  storage:
+    size: 10Gi
+    storageClass: local-path
+
+# -------------------------------------------------------------------
+# Text storage
+# -------------------------------------------------------------------
+textStorage:
+  size: 1Gi
+  storageClass: local-path
+  path: /home/ag7es/Documents/nlp-pipeline/nlp-pipeline-v5/text_db/texts

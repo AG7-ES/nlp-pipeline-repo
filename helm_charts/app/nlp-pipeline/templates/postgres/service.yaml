@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    {{ include "nlp-pipeline.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: tcp-port
+      port: {{ .Values.postgres.db.port }}
+      targetPort: {{ .Values.postgres.db.port }}
+      protocol: TCP
