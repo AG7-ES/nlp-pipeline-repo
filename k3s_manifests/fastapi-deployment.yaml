@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-deployment
+  namespace: nlp-pipeline
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fastapi
+  template:
+    metadata:
+      labels:
+        app: fastapi
+    spec:
+      containers:
+        - name: fastapi
+          image: ag7es/nlp-pipeline:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            # -------------------------
+            # Database configuration
+            # -------------------------
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_HOST
+
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_PORT
+
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_USER
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_DB
+
+
+            # -------------------------
+            # App configuration
+            # -------------------------
+            - name: TEXT_DIR
+              value: "/app/texts"
+
+            # -------------------------
+            # Datadog APM / Logs
+            # -------------------------
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+
+            - name: DD_SERVICE
+              value: nlp-fastapi
+
+            - name: DD_ENV
+              value: prod
+
+            - name: DD_VERSION
+              value: "3.0.0"
+
+            - name: DD_LOGS_INJECTION
+              value: "true"
+
+            # -------------------------
+            # Kubernetes metadata for correlation
+            # -------------------------
+            - name: DD_KUBERNETES_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: DD_KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+            - name: DD_KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          volumeMounts:
+            - name: text-storage
+              mountPath: /app/texts
+              readOnly: true
+
+      volumes:
+        - name: text-storage
+          persistentVolumeClaim:
+            claimName: text-pvc

@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: datadog
+  namespace: nlp-pipeline
+  labels:
+    app: datadog
+spec:
+  selector:
+    matchLabels:
+      app: datadog
+  template:
+    metadata:
+      labels:
+        app: datadog
+    spec:
+      serviceAccountName: datadog-agent
+
+      containers:
+        - name: datadog-agent
+          image: gcr.io/datadoghq/agent:7
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: DD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: datadog-secret
+                  key: DD_API_KEY
+
+            - name: DD_SITE
+              value: "datadoghq.eu"
+
+            # ---- APM (CRITICAL) ----
+            - name: DD_APM_ENABLED
+              value: "true"
+
+            - name: DD_APM_NON_LOCAL_TRAFFIC
+              value: "true"
+
+            # ---- Logs ----
+            - name: DD_LOGS_ENABLED
+              value: "true"
+
+            # ---- Container discovery ----
+            - name: DD_CONTAINER_COLLECT_ALL
+              value: "true"
+
+            # ---- Required for k3s / containerd ----
+            - name: DD_KUBERNETES_KUBELET_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+
+            - name: DD_PROCESS_AGENT_ENABLED
+              value: "true"
+
+          ports:
+            - name: apm
+              containerPort: 8126
+              hostPort: 8126
+              protocol: TCP
+
+            - name: dogstatsd
+              containerPort: 8125
+              hostPort: 8125
+              protocol: UDP
+
+
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: cgroup
+              mountPath: /host/sys/fs/cgroup
+              readOnly: true
+            - name: datadog-run
+              mountPath: /var/run/datadog
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - SYS_PTRACE
+                - NET_ADMIN
+                - NET_RAW
+
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: datadog-run
+          hostPath:
+            path: /var/run/datadog
+
+      tolerations:
+        - operator: "Exists"
