@@ -3,7 +3,6 @@
 ## 1. Service Overview
 
 ```python
-
 @app.get("/", response_class=JSONResponse, tags=['Endpoints'])
 async def index():
     """
@@ -62,7 +61,7 @@ sequenceDiagram
 
 * **Explicit SQL**: Deliberately avoids ORM models in favor of explicit SQLAlchemy Core queries for predictable performance, clear transactional boundaries, and easier debugging.
 
-* **Production Hardened**: Includes safe concurrent startup hooks (DB readiness checks, advisory locks) and graceful shutdown procedures.
+* **Production Hardened**: Includes safe concurrent startup hooks (DB readiness checks and advisory locks) and graceful shutdown procedures.
 
 * **Observability**: Built-in Datadog APM auto-instrumentation via `ddtrace`.
 
@@ -74,7 +73,7 @@ sequenceDiagram
 
 * **Database**: PostgreSQL, Async SQLAlchemy + asyncpg
 
-* **Observability**: Datadog (ddtrace patched)
+* **Observability**: Datadog (`ddtrace` patched)
 
 * **Infrastructure**: Docker, Kubernetes (Helm/K3s), Terraform (AWS)
 
@@ -85,7 +84,7 @@ sequenceDiagram
 | GET    | /files                           | List documents (id, filename)                                    |
 | GET    | /files/{doc_id}                  | View document content (JSON)                                     |
 | POST   | /upload                          | Upload a .txt file (collision-safe naming)                       |
-| DELETE | /files/{doc_id}                  | Delete document & cascade delete analysis                        |
+| DELETE | /files/{doc_id}                  | Delete document and cascade delete analysis                        |
 | GET    | /download/{doc_id}.txt           | Download raw text file                                           |
 | GET    | /analyze/{doc_id}                | Run transient analysis (tokens, lemmas, morphs, vectors)         |
 | POST   | /analyze-and-store/{doc_id}      | Run analysis and commit to DB (idempotent upsert)                |
@@ -93,7 +92,7 @@ sequenceDiagram
 | GET    | /download-analysis/{doc_id}.json | Download stored analysis as .json file                           |
 | DELETE | /analysis/{doc_id}               | Delete stored analysis                                           |
 
-## 3. Development and Testing Phase
+## 3. Testing Phase with the pytest Framework
 
 Run the test suite using a dedicated Docker Compose environment to ensure isolation from production data.
 
@@ -101,9 +100,9 @@ Run the test suite using a dedicated Docker Compose environment to ensure isolat
 
 * Git
 
-* Docker & Docker Compose
+* Docker and Docker Compose
 
-### Configuration & Environment Variables
+### Configuration and Environment Variables
 
 Create a `.env` file in the root directory with the following variables:
 
@@ -119,54 +118,66 @@ Create a `.env` file in the root directory with the following variables:
 ```bash
 # 1. Clone the repository
 git clone https://github.com/AG7-ES/nlp-pipeline-repo.git
+
+# 2. Navigate to the TESTING directory
 cd nlp-pipeline-repo/testing
 
-# 2. Configure Environment
+# 3. Create and configure the .env file
 touch .env
-# Edit the .env file with the following content:
-# POSTGRES_USER=your_postgres_user
-# POSTGRES_PASSWORD=your_postgres_password
-# POSTGRES_DB=your_postgres_db
+nano .env
 
-# 3. Build and start test services (detached)
+# Add the required environment variables (example content):
+# .env
+POSTGRES_USER=your_postgres_user
+POSTGRES_PASSWORD=your_postgres_password
+POSTGRES_DB=your_postgres_db
+
+# 4. Build and start the test services with Docker Compose in detached mode
 docker compose -f docker-compose.test.yaml up --build -d
 
-# 4. Verify services are running
+# 5. Check the status of running test services
 docker compose -f docker-compose.test.yaml ps
 
-# 5. (Optional) Tail logs
-docker compose -f docker-compose.test.yaml logs -f fastapi_test_app
+# 6. View logs for a specific test service (replace SERVICE_NAME with the actual test service name)
+docker compose -f docker-compose.test.yaml logs -f SERVICE_NAME
 
-# 6. Verify API availability
+# 7. Test the API endpoint to ensure the test service is running
 curl -v http://localhost:8001/
 
-# 7. Execute Tests inside the container
+# 8. Enter the running container for the test service
 docker exec -it nlp_test_fastapi bash
-# Inside container:
+
+# 9. Run the tests using pytest
 pytest -v /app/tests/
+
+# 10. Exit the test container
 exit
 
-# 8. Teardown
+# 11. Stop all running test services and remove the containers (when done)
 docker compose -f docker-compose.test.yaml down
 ```
 
-## 4. Container Build and Registry
+## 4. Building, Pushing and Inspecting the Docker Image
 
 Instructions for building the production image and pushing to Docker Hub.
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/AG7-ES/nlp-pipeline-repo.git
+
+# 2. Navigate to the FastAPI app directory
 cd nlp-pipeline-repo/fastapi_app
 
-# 1. Login to Registry
+# 3. Log in to Docker Hub (you'll be prompted for your credentials)
 docker login
 
-# 2. Build Image
+# 4. Build the Docker image locally
 docker build -t DOCKERHUB_USERNAME/IMAGE_NAME:IMAGE_TAG .
 
-# 3. Push to Registry
+# 5. Push the Docker image to Docker Hub
 docker push DOCKERHUB_USERNAME/IMAGE_NAME:IMAGE_TAG
 
-# 4. Inspect Image Metadata
+# 6. Inspect the Docker image to view details about it
 docker inspect DOCKERHUB_USERNAME/IMAGE_NAME:IMAGE_TAG
 ```
 
@@ -175,42 +186,54 @@ docker inspect DOCKERHUB_USERNAME/IMAGE_NAME:IMAGE_TAG
 Run the full stack (App, DB, Datadog Agent) locally.
 
 ```bash
+# 1. Clone the repository and navigate to the project directory
+git clone https://github.com/AG7-ES/nlp-pipeline-repo.git
 cd nlp-pipeline-repo
 
-# 1. Configure Environment
+# 2. Create and configure the .env file
 touch .env
-# Add the following:
-# POSTGRES_USER=your_postgres_user
-# POSTGRES_PASSWORD=your_postgres_password
-# POSTGRES_DB=your_postgres_db
-# DD_API_KEY=your_datadog_api_key
+nano .env
 
-# 2. Start Services
+# Add the required environment variables (example content):
+# .env
+POSTGRES_USER=your_postgres_user
+POSTGRES_PASSWORD=your_postgres_password
+POSTGRES_DB=your_postgres_db
+DD_API_KEY=your_datadog_api_key
+
+# 3. Build and start the services with Docker Compose in detached mode
 docker compose up --build -d
 
-# 3. Verify Deployment
+# 4. Check the status of running services
 docker compose ps
+
+# 5. View logs for a specific service (replace SERVICE_NAME with the actual service name)
+docker compose logs SERVICE_NAME
+
+# 6. Test the API endpoint to ensure the service is running
 curl -v http://localhost:8000/
 
-# 4. Observability
-# Visit https://app.datadoghq.eu/apm/traces to view APM traces.
+# 7. Check Datadog APM traces (if Datadog APM is enabled)
+# Visit the Datadog APM dashboard to view the application's performance and traces
+# URL: https://app.datadoghq.eu/apm/traces
 
-# 5. Teardown
+# 8. Stop all running services and remove the containers (when done)
 docker compose down
 ```
 
 ## 6. Kubernetes Orchestration
 
-You can deploy using either raw manifests or Helm Charts.
+It is possible to deploy using either raw manifests or Helm Charts.
 
 ### Option A: Deployment via K3s Manifests
 
 Ideal for simple clusters or debugging raw YAML configurations.
 
 ```bash
+git clone https://github.com/AG7-ES/nlp-pipeline-repo.git
 cd nlp-pipeline-repo/k3s_manifests
 
-# 1. Setup Namespace & Secrets
+# 1. Setup Namespace and Secret
 kubectl create namespace nlp-pipeline
 kubectl create secret generic datadog-secret \
   --from-literal=DD_API_KEY=<your-real-key> \
@@ -219,15 +242,22 @@ kubectl create secret generic datadog-secret \
 # 2. Apply Manifests
 kubectl apply -f . -n nlp-pipeline
 
-# 3. Verification
+# 3. Check the status of all resources in the namespace
 kubectl get all -n nlp-pipeline
 
-# 4. Access (Port Forwarding)
+# 4. View logs of a specific resource
+kubectl logs ITEM_NAME -n nlp-pipeline
+
+# 5. Access (Port Forwarding)
 # If Ingress is not configured:
 kubectl port-forward svc/fastapi-service 8000:80 -n nlp-pipeline
 # Visit: http://localhost:8000/
 
-# 5. Cleanup
+# 6. Check Datadog APM traces (if Datadog APM is enabled)
+# Visit the Datadog APM dashboard to view the application's performance and traces
+# URL: https://app.datadoghq.eu/apm/traces
+
+# 7. Clean up all resources (when done)
 kubectl delete namespace nlp-pipeline
 ```
 
@@ -236,9 +266,10 @@ kubectl delete namespace nlp-pipeline
 Recommended for production deployments to manage complexity and dependencies.
 
 ```bash
+git clone https://github.com/AG7-ES/nlp-pipeline-repo.git
 cd nlp-pipeline-repo
 
-# 1. Setup Namespace & Secrets
+# 1. Setup Namespace and Secret
 kubectl create namespace nlp-pipeline
 kubectl create secret generic datadog-secret \
   --from-literal=DD_API_KEY=<your-real-key> \
@@ -338,8 +369,11 @@ ssh -A ubuntu@$BASTION_IP
 # From Bastion, jump to app instance:
 ssh ubuntu@<PRIVATE_IP_OF_APP_INSTANCE>
 
-# Check containers on remote host
+# Check containers and logs of services on remote host
 sudo docker ps
+sudo docker compose logs -f <SERVICE_NAME>
+sudo docker compose logs -f <SERVICE_NAME>
+sudo docker compose logs -f <SERVICE_NAME>
 ```
 
 ### 7.4. Destruction
@@ -368,7 +402,7 @@ erDiagram
         jsonb morphs "Morphological dicts"
         jsonb dependencies "Dep tree"
         jsonb entities "Named Entities"
-        jsonb word_vectors "Token vectors & norms"
+        jsonb word_vectors "Token vectors and norms"
     }
 ```
 
@@ -392,7 +426,7 @@ sequenceDiagram
     DB-->>App1: Lock Acquired (Success)
     DB-->>App2: Lock Failed (Busy)
     
-    Note over App1: Creates Tables & Indexes
+    Note over App1: Creates Tables and Indexes
     Note over App1: Loads /app/texts/*.txt
     Note over App1: Realigns ID Sequences
     
@@ -407,9 +441,9 @@ sequenceDiagram
 
 The `db_loader.py` module facilitates "Infrastructure as Data":
 
-* Mounting: Put your `.txt` files in a folder and mount it to `/app/texts` in the container.
+* Mounting: Put the `.txt` files in a folder and mount it to `/app/texts` in the container.
 
-* Idempotency: The loader uses `ON CONFLICT (filename) DO UPDATE`, so you can update initial documents by simply changing the source files and restarting the containers.
+* Idempotency: The loader uses `ON CONFLICT (filename) DO UPDATE`, initial documents can be updated by simply changing the source files and restarting the containers.
 
 * Sequence Alignment: Automatically fixes PostgreSQL `SERIAL` counters after manual or bulk inserts to prevent `Key (id)=(X) already exists` errors.
 
@@ -419,11 +453,11 @@ Because this API loads the `en_core_web_lg` (Large) spaCy model into memory, its
 
 ### Memory Footprint
 
-* Idle (Model Loaded): ~800 MB - 1.1 GB RAM.
+* Idle (Model Loaded): From around 800 MB to 1.1 GB RAM.
 
-* During Heavy Analysis: Can spike to 1.5 GB+ depending on document size.
+* During Heavy Analysis: Can spike to 1.5 GB and more depending on document size.
 
-* Storage: The Docker image is ~2.5 GB due to the pre-installed spaCy model and dependencies.
+* Storage: The Docker image uses around 2.0 GB of disk space due to the pre-installed spaCy model and dependencies. The actual content size is around 600 MB.
 
 ### Kubernetes Resource Specs (Recommended)
 
