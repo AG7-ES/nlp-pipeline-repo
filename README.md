@@ -479,7 +479,7 @@ resources:
 
 * HPA (Horizontal Pod Autoscaler): Scale based on CPU utilization (e.g., 70%). Scaling based on memory is not recommended here because memory remains high/static once the model is loaded.
 
-* Concurrency: We use asyncio.to_thread to prevent the event loop from blocking. For production, we recommend 2-4 workers per container (managed via Gunicorn/Uvicorn workers) to utilize multiple cores.
+* Concurrency: We use `asyncio.to_thread` to prevent the event loop from blocking. For production, we recommend 2-4 workers per container (managed via Gunicorn/Uvicorn workers) to utilize multiple cores.
 
 ### 12. Troubleshooting and FAQ
 
