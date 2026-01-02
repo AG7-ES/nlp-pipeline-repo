@@ -1,0 +1,190 @@
+# ===============================================================
+# Global variables
+# ===============================================================
+variables:
+  DOCKER_REGISTRY: docker.io
+  DOCKERHUB_USERNAME: "ag7es"
+  NLPIPELINE_IMAGE_NAME: "nlp-pipeline"
+  NLPIPELINE_IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+
+  DOCKER_TLS_CERTDIR: ""
+
+# ===============================================================
+# Default Docker image (build/test/push)
+# ===============================================================
+image: docker:latest
+
+services:
+  - name: docker:dind
+    command: ["--tls=false"]
+
+# ===============================================================
+# Stages
+# ===============================================================
+stages:
+  - build
+  - test
+  - push
+  - lint
+  - deploy_infra
+  - deploy_app
+  - destroy
+
+# ===============================================================
+# Reusable kubeconfig setup
+# ===============================================================
+.kube_setup: &kube_setup
+  before_script:
+    - rm -Rf ~/.kube
+    - mkdir ~/.kube/
+    - cat $KUBE_CONFIG > ~/.kube/config
+    - chmod 700 ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+
+# ===============================================================
+# Build image
+# ===============================================================
+build_image:
+  stage: build
+  variables:
+    DOCKERFILE_NAME: "Dockerfile"
+    DOCKER_DIR: "./fastapi_app"
+    IMAGE_NAME: "$NLPIPELINE_IMAGE_NAME"
+    IMAGE_TAG: "$NLPIPELINE_IMAGE_TAG"
+  script:
+    - dockerd &
+    - DOCKER_BUILDKIT=0 docker build -f ${DOCKER_DIR}/${DOCKERFILE_NAME} -t ${IMAGE_NAME}:${IMAGE_TAG} ${DOCKER_DIR}/.
+    - docker save -o ${IMAGE_NAME}_${IMAGE_TAG}.tar ${IMAGE_NAME}:${IMAGE_TAG}
+  artifacts:
+    paths:
+      - ${IMAGE_NAME}_${IMAGE_TAG}.tar  
+
+# ===============================================================
+# Test image
+# ===============================================================
+test_image:
+  stage: test
+  needs: ["build_image"]
+  variables:
+    DOCKERFILE_NAME: "Dockerfile"
+    DOCKER_DIR: "./fastapi_app"
+    IMAGE_NAME: "$NLPIPELINE_IMAGE_NAME"
+    IMAGE_TAG: "$NLPIPELINE_IMAGE_TAG"
+    PORT_APP: "8000"
+    PORT_HOST: "8000"
+  script: 
+    - docker load -i ${IMAGE_NAME}_${IMAGE_TAG}.tar
+    - docker run --name ${IMAGE_NAME} -dp ${PORT_HOST}:${PORT_APP} ${IMAGE_NAME}:${IMAGE_TAG}
+    - sleep 5
+    - docker ps -a | grep ${IMAGE_NAME}
+  after_script:
+    - docker rm -f ${IMAGE_NAME} || true
+
+# ===============================================================
+# Push image to Docker Hub
+# ===============================================================
+push_image:
+  stage: push
+  needs: ["build_image","test_image"]
+  before_script:
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - docker load -i ${NLPIPELINE_IMAGE_NAME}_${NLPIPELINE_IMAGE_TAG}.tar
+    - docker tag ${NLPIPELINE_IMAGE_NAME}:${NLPIPELINE_IMAGE_TAG} ${DOCKERHUB_USERNAME}/${NLPIPELINE_IMAGE_NAME}:${NLPIPELINE_IMAGE_TAG}
+    - docker push ${DOCKERHUB_USERNAME}/${NLPIPELINE_IMAGE_NAME}:${NLPIPELINE_IMAGE_TAG}
+
+# ===============================================================
+# Helm lint
+# ===============================================================
+helm_lint:
+  stage: lint
+  needs: ["push_image"]
+  script:
+    - helm lint helm_charts/app/nlp-pipeline
+    - helm lint helm_charts/infra/cert-manager
+    - helm lint helm_charts/infra/datadog
+
+# ===============================================================
+# Deploy Infra (cert-manager + datadog) - Idempotent
+# ===============================================================
+deploy_cluster_infra:
+  stage: deploy_infra
+  needs: ["helm_lint"]
+  <<: *kube_setup
+  script:
+    # cert-manager (cluster-wide)
+    - helm upgrade --install cert-manager-issuer helm_charts/infra/cert-manager --atomic
+
+    # Datadog (cluster-wide)
+    - helm upgrade --install datadog-agent helm_charts/infra/datadog --namespace nlp-pipeline --atomic
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+
+# ===============================================================
+# Deploy App
+# ===============================================================
+.deploy_app_template: &deploy_app
+  stage: deploy_app
+  <<: *kube_setup
+  script:
+    - helm upgrade --install nlp-pipeline-${ENV} helm_charts/app/nlp-pipeline --namespace ${ENV} --atomic
+
+deploy_app_dev:
+  <<: *deploy_app
+  needs: ["deploy_cluster_infra"]
+  variables: { ENV: dev }
+
+deploy_app_qa:
+  <<: *deploy_app
+  needs: ["deploy_cluster_infra"]
+  variables: { ENV: qa }
+
+deploy_app_staging:
+  <<: *deploy_app
+  needs: ["deploy_cluster_infra"]
+  variables: { ENV: staging }
+
+deploy_app_prod:
+  <<: *deploy_app
+  needs: ["deploy_cluster_infra"]
+  variables: { ENV: prod }
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  environment:
+    name: production
+
+# ===============================================================
+# Destroy environment (manual)
+# ===============================================================
+.destroy_app_template: &destroy_app
+  stage: destroy
+  <<: *kube_setup
+  script:
+    - helm uninstall nlp-pipeline-${ENV} --namespace ${ENV}
+
+destroy_app_dev:
+  <<: *destroy_app
+  needs: ["deploy_app_dev"]
+  variables: { ENV: dev }
+  when: manual
+
+destroy_app_qa:
+  <<: *destroy_app
+  needs: ["deploy_app_qa"]
+  variables: { ENV: qa }
+  when: manual
+
+destroy_app_staging:
+  <<: *destroy_app
+  needs: ["deploy_app_staging"]
+  variables: { ENV: staging }
+  when: manual
+
+destroy_app_prod:
+  <<: *destroy_app
+  needs: ["deploy_app_prod"]
+  variables: { ENV: prod }
+  when: manual
