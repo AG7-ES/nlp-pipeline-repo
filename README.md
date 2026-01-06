@@ -299,7 +299,7 @@ kubectl delete namespace nlp-pipeline
 
 ## 7. Cloud Infrastructure (Terraform and AWS)
 
-Automates the provisioning of AWS EC2 instances, networking, and security groups to host the Docker Compose deployment.
+Automates the provisioning of AWS EC2 instances, ALB, networking, and security groups to host the Docker Compose deployment.
 
 ```mermaid
 graph TD
