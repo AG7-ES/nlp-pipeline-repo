@@ -67,7 +67,7 @@ sequenceDiagram
 
 ### Tech Stack
 
-* **Core**: Python 3.9+, FastAPI, Uvicorn
+* **Core**: Python 3.11, FastAPI, Uvicorn
 
 * **NLP**: spaCy (`en_core_web_lg`)
 
