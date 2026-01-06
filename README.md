@@ -44,7 +44,7 @@ sequenceDiagram
     Note right of API: Offload blocking spaCy work
     API->>Worker: Dispatch run_nlp_analysis(text)
     activate Worker
-    Worker-->>Worker: Tokenize, Lemmatize, Vectorize
+    Worker-->>Worker: NLP Analysis
     Worker-->>API: Return JSON Result
     deactivate Worker
     
@@ -84,9 +84,9 @@ sequenceDiagram
 | GET    | /files                           | List documents (id, filename)                                    |
 | GET    | /files/{doc_id}                  | View document content (JSON)                                     |
 | POST   | /upload                          | Upload a .txt file (collision-safe naming)                       |
-| DELETE | /files/{doc_id}                  | Delete document and cascade delete analysis                        |
+| DELETE | /files/{doc_id}                  | Delete document and cascade delete analysis                      |
 | GET    | /download/{doc_id}.txt           | Download raw text file                                           |
-| GET    | /analyze/{doc_id}                | Run transient analysis (tokens, lemmas, morphs, vectors)         |
+| GET    | /analyze/{doc_id}                | Run transient NLP analysis                                       |
 | POST   | /analyze-and-store/{doc_id}      | Run analysis and commit to DB (idempotent upsert)                |
 | GET    | /analysis/{doc_id}               | Retrieve stored analysis                                         |
 | GET    | /download-analysis/{doc_id}.json | Download stored analysis as .json file                           |
@@ -303,7 +303,7 @@ Automates the provisioning of AWS EC2 instances, networking, and security groups
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS| ALB(AWS Load Balancer)
+    Client((Client)) -->|HTTPS| ALB(AWS Load Balancer)
     
     subgraph "AWS VPC (eu-west-3)"
         ALB -->|Forward| Bastion[Bastion Host]
@@ -315,10 +315,12 @@ graph TD
                 FastAPI[FastAPI Service]
                 DB[(PostgreSQL)]
                 Agent[Datadog Agent]
+                Texts[(TXT DIR<br/>Host)]
                 
                 FastAPI -->|Async R/W| DB
                 FastAPI -.->|Traces| Agent
                 DB -.->|Metrics| Agent
+                Texts -->|Read-only| FastAPI
             end
         end
     end
