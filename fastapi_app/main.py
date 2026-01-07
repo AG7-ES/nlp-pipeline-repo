@@ -258,7 +258,7 @@ async def index():
             "POST /upload": "Upload a UTF-8 .txt file (form field 'file', optional 'filename')",
             "DELETE /files/{doc_id}": "Delete document (and its analysis via cascade)",
             "GET /download/{doc_id}.txt": "Download raw .txt file for document",
-            "GET /analyze/{doc_id}": "Run transient analysis and return results (not stored)",
+            "GET /analyze/{doc_id}": "Run transient NLP analysis",
             "POST /analyze-and-store/{doc_id}": "Run analysis and store results in DB",
             "GET /analysis/{doc_id}": "Retrieve stored analysis (JSON)",
             "GET /download-analysis/{doc_id}.json": "Download stored analysis as .json file",
